@@ -1,8 +1,9 @@
 # Buildpacks to include in builder
 [[buildpacks]]
-id = "samples/java-maven"
-version = "0.0.1"
-uri = "../../buildpacks/java-maven"
+#id = "samples/java-maven"
+#version = "0.0.1"
+#uri = "../../buildpacks/java-maven"
+uri = "docker://jandebryan/my-sample-java-maven:latest"
 
 [[buildpacks]]
 id = "samples/kotlin-gradle"
@@ -15,8 +16,8 @@ uri = "docker://cnbs/sample-package:hello-universe"
 # Order used for detection
 [[order]]
 [[order.group]]
-id = "samples/java-maven"
-version = "0.0.1"
+id = "my-samples/java-maven"
+version = "0.0.2"
 
 [[order]]
 [[order.group]]
@@ -31,5 +32,7 @@ version = "0.0.1"
 # Stack that will be used by the builder
 [stack]
 id = "io.buildpacks.samples.stacks.alpine"
-run-image = "cnbs/sample-stack-run:alpine"
-build-image = "cnbs/sample-stack-build:alpine"
+#run-image = "cnbs/sample-stack-run:alpine"
+#build-image = "cnbs/sample-stack-build:alpine"
+run-image = "jandebryan/stack-run:alpine"
+build-image = "jandebryan/stack-build:alpine"
