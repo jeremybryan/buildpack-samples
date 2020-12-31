@@ -1,58 +1,87 @@
-# Buildpack Samples [![Build Status](https://github.com/buildpacks/samples/workflows/Build%20and%20Deploy/badge.svg?branch=main)](https://github.com/buildpacks/samples/actions)
+## Overview
 
-This repository contains sample implementations of the core components of the [Cloud Native Buildpacks](https://buildpacks.io/) (CNB) project for learning and testing purposes.
+This describes the steps taken to augment the existing builder, buildpacks, and stacks to build my 
+own buildpacks. 
 
-Includes:
+The changes were made to impact the `alpine` variant of the buildpacks in this source tree.
 
-- [Apps](apps/)
-- [Buildpacks](buildpacks/)
-- [Builders](builders/)
-- [Stacks](stacks/)
-- [Packages](packages/)
+Changes were required in the following directories:
+* `builders\alpine` 
+* `buildpacks\java-maven` 
+* `stacks\alpine`
 
-
-### Start here:
-
-To get up and running, [install `pack`](https://buildpacks.io/docs/install-pack/) and run `make build-linux` or `make build-windows`, depending on your choice of target OS.
-Follow the `README.md` docs at the root directory of each component to choose your next step. We recommend starting to play with building [apps](./apps).
+Below are the steps taken to change the content in each of these directories. 
 
 
-### External Buildpacks
+##### buildpacks 
+The buildpacks did not require a change for this simple augmentation. I was specifically targeting 
+the `java-maven` buildpack for this exercise. But since I was mostly focused on just better understanding the 
+relationships between `builders`, `stacks` and `buildpacks` there was no need to modify the buildpaclk.
 
-* [CloudFoundry Cloud Native Buildpacks](https://hub.docker.com/r/cloudfoundry/cnb)
-* [Heroku Java Cloud Native Buildpack](https://github.com/heroku/java-buildpack)
+###### packages
+While we did not modify the buildpack directly, we did explore how the buildpacks are packaged and used by the builders
+so we created a `java-maven` directory and created a `package.toml` file to define the packaging instructions. We then 
+ran the following command to package the buildpack.
 
-# Quick Reference
-- [Create a Buildpack Tutorial](https://buildpacks.io/docs/buildpack-author-guide/create-buildpack/) &rarr; Tutorial to get you started on your first Cloud Native Buildpack
-- [Buildpacks.io](https://buildpacks.io/) &rarr; Cloud Native Buildpack website
-- [Pack – Buildpack CLI](https://github.com/buildpacks/pack) &rarr; CLI used to consume the builder, along with source code, and construct an OCI image
-- [CNB Tutorial](https://buildpacks.io/docs/app-journey/) &rarr; Tutorial to get you started using `pack`, a `builder`, and your application to create a working OCI image
-- [Buildpack & Platform Specification](https://github.com/buildpacks/spec) &rarr; Detailed definition of the interaction between a platform, a lifecycle, Cloud Native Buildpacks, and an application
+    $ cd packages\java-maven
+    $ pack package-buildpack jandebryan/my-sample-java-maven --config ./package.toml 
+
+##### stacks
+The stacks did not require changes to the details of the dockerfiles. The docker files simply define the container 
+images to be used for the build and run steps of the buildpack process. For our purposes I just wanted to create a stack
+tagged for my own registry (versus the default `cnbs`)
+
+    $ cd stacks
+    $ ./build-stack.sh -p jandebryan/stack -v latest alpine
+
+Following this we'll see the new images in the list of docker images on the docker daemon
+
+    jandebryan/stack-run                          alpine                    5d1a32cfa0ec        39 hours ago        8.11MB
+    jandebryan/stack-build                        alpine                    75e5816d28b8        39 hours ago        28.5MB
+    jandebryan/stack-base                         alpine                    191651e14e0b        39 hours ago        8.11MB
 
 
-# Development
+##### builders 
+The builders required the most extensive changes. For the purposes of this exercise, we change the `builder.toml` file 
+to point to the new `jandebryan/stack-*` images created by the `build-stack.sh` command (described above).
 
-### Prerequisites
+More specifically within the `build.toml` file we change the stacks to be used with the builder.
 
-- [Docker](https://hub.docker.com/search/?type=edition&offering=community)
-- [Pack](https://buildpacks.io/docs/install-pack/)
-- [Make](https://www.gnu.org/software/make/)
-- [WSL w/ Ubuntu](https://docs.microsoft.com/en-us/windows/wsl/install-win10) (Windows)
+    # Buildpacks to include in builder
+    [[buildpacks]]
+    #id = "samples/java-maven"                                <--- commented this out 
+    #version = "0.0.1"                                        <--- commented this out 
+    #uri = "../../buildpacks/java-maven"                      <--- commented this out 
+    uri = "docker://jandebryan/my-sample-java-maven:latest"   <--- added the uri to the locally build docker
+    ...
+    ...
+    # Stack that will be used by the builder
+    [stack]
+    id = "io.buildpacks.samples.stacks.alpine"
+    #run-image = "cnbs/sample-stack-run:alpine"       <--- comment this out 
+    #build-image = "cnbs/sample-stack-build:alpine"   <--- comment this out 
+    run-image = "jandebryan/stack-run:alpine"
+    build-image = "jandebryan/stack-build:alpine"
 
-#### Test
 
-##### Linux-Based Containers
+Once these changes were made we recreated the builder images using the following command:
 
-```shell script
-make build-linux
-```
+   
+    $ cd builders/alpine 
+    $ ./createBuilder.sh (this script contains the full package create-builder command)
+   
+    
+Following this command you'll find the new sample-build image in the list of images on the daemon:
 
-##### Windows-Based Containers
+    jandebryan/sample-builder                     alpine                    c943415a8d02        41 years ago        41.8MB
 
-```shell script
-make build-windows
-```
 
-#### Contributing
-- Samples are maintained by https://github.com/orgs/buildpacks/teams/learning-maintainers
-- Buildpacks Slack [#learning-team](https://buildpacks.slack.com/archives/CST4A3ECV)
+Now that these `stack`, `builder` and `build-packs` are updated we can build the application, 
+in this case the `apps\java-maven` application by using the following command:
+
+    pack build java-sample --path apps/java-maven --builder jandebryan/sample-builder:alpine
+
+
+Once this command completes you can run the application with the following command:
+    
+    docker run --rm -p 8080:8080 java-sample
